@@ -1,26 +1,34 @@
 cmake_minimum_required(VERSION 3.1.3)
-project(flexcraft_panda)
+project(semantic_planning_panda)
 
 #set(CMAKE_CXX_STANDARD 14)
 #set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Eigen3 REQUIRED)
+find_package(catkin REQUIRED COMPONENTS cmake_modules)
+
+find_package(Eigen REQUIRED)
 find_package(Franka REQUIRED)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
+catkin_package(
+#    INCLUDE_DIRS ...
+#    LIBRARIES ...
+#    CATKIN DEPENDS ...
+    DEPENDS Eigen
+    )
 
+include_directories( ${Eigen_INCLUDE_DIRS} )
 add_library(examples_common STATIC
   src/examples_common.cpp
 )
-target_link_libraries(examples_common PUBLIC Franka::Franka Eigen3::Eigen)
+target_link_libraries(examples_common PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
 add_executable(run_test src/main.cpp)
 target_link_libraries(run_test PUBLIC
   Franka::Franka
-  Eigen3::Eigen
+  ${Eigen_LIBRARIES}
   Threads::Threads
   examples_common
 )
