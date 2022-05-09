@@ -13,10 +13,15 @@
 
 class ModelPredictiveController {
 public:
+    ModelPredictiveController(franka::Model* model)
+    {
+        robot_model = model;
+    }
+
     std::array<double, 7> controlLaw(const franka::RobotState& robot_state, franka::Duration period);
 
 private:
     double maximum_end_effector_velocity;
 
-    franka::Model robot_model;
+    franka::Model* robot_model;
 };

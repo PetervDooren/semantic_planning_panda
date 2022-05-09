@@ -62,21 +62,14 @@ int main(int argc, char** argv) {
       // Try to lock data to avoid read write collisions.
       if (print_data.mutex.try_lock()) {
         if (print_data.has_data) {
-          std::array<double, 7> tau_error{};
-          double error_rms(0.0);
           std::array<double, 7> tau_d_actual{};
           for (size_t i = 0; i < 7; ++i) {
             tau_d_actual[i] = print_data.tau_d_last[i] + print_data.gravity[i];
-            tau_error[i] = tau_d_actual[i] - print_data.robot_state.tau_J[i];
-            error_rms += std::pow(tau_error[i], 2.0) / tau_error.size();
           }
-          error_rms = std::sqrt(error_rms);
 
           // Print data to console
-          std::cout << "tau_error [Nm]: " << tau_error << std::endl
-                    << "tau_commanded [Nm]: " << tau_d_actual << std::endl
+          std::cout << "tau_commanded [Nm]: " << tau_d_actual << std::endl
                     << "tau_measured [Nm]: " << print_data.robot_state.tau_J << std::endl
-                    << "root mean square of tau_error [Nm]: " << error_rms << std::endl
                     << "-----------------------" << std::endl;
           print_data.has_data = false;
         }
@@ -110,15 +103,27 @@ int main(int argc, char** argv) {
 
     // Load the kinematics and dynamics model.
     franka::Model model = robot.loadModel();
+    ModelPredictiveController MPCControl(&model);
 
-    std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
+    /*
+    franka::RobotState initial_state = robot.readOnce();
+    Eigen::Affine3d initial_transform(Eigen::Matrix4d::Map(initial_state.O_T_EE.data()));
+    Eigen::Vector3d init_position(initial_transform.translation());
+    Eigen::Quaterniond initial_orientation(initial_transform.linear());
+    std::cout << "initial position: " << init_position << std::endl;
+    std::cout << "initial orientation: " << initial_orientation.coeffs() << std::endl;
+    */
 
     // Define callback for the joint torque control loop.
     std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
         hardware_control_callback =
-            [&print_data, &model, &tau_d_input](
-                const franka::RobotState& state, franka::Duration /*period*/) -> franka::Torques {
+            [&print_data, &model, &MPCControl](
+                const franka::RobotState& state, franka::Duration period) -> franka::Torques {
       // Read current coriolis terms from model.
+
+      std::array<double, 7> tau_d_input = MPCControl.controlLaw(state, period);
+
+      //tau_d_input = {0, 0, 0, 0, 0, 0, 0};
 
       // The following line is only necessary for printing the rate limited torque. As we activated
       // rate limiting for the control loop (activated by default), the torque would anyway be

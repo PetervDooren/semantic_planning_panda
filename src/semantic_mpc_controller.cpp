@@ -62,14 +62,24 @@ Eigen::Vector2d in(double x, double y)
     return outputvel;
 }
 
+void limitForce(Eigen::Matrix<double, 6, 1> force)
+{
+    double max_F = 10.0;
+    double max_torque = 10.0;
+    for(int i = 0; i < 3; i++)
+        force(i,0) = std::min(max_F, std::max(-max_F, force(i,0)));
+    for(int i = 3; i < 6; i++)
+        force(i,0) = std::min(max_torque, std::max(-max_torque, force(i,0)));
+}
+
 std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotState& robot_state, franka::Duration period)
 {
     // aggregate robot state
 
     // get state variables
-    std::array<double, 7> coriolis_array = robot_model.coriolis(robot_state);
+    std::array<double, 7> coriolis_array = robot_model->coriolis(robot_state);
     std::array<double, 42> jacobian_array =
-        robot_model.zeroJacobian(franka::Frame::kEndEffector, robot_state);
+        robot_model->zeroJacobian(franka::Frame::kEndEffector, robot_state);
 
     // convert to Eigen
     Eigen::Map<const Eigen::Matrix<double, 7, 1>> coriolis(coriolis_array.data());
@@ -84,6 +94,8 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     // determine the semantic state of the robot
     HorizontalTopology htop = determineHorizontalTopology(position[0], position[1]);
     VerticalTopology vtop = determineVerticalTopology(position[2]);
+
+    //std::cout << "htop: " << htop << " , vtop: " << vtop << std::endl;
 
     // control law based on this state
     Eigen::Vector3d desired_velocity;
@@ -103,13 +115,15 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     }
     else if(vtop == above)
     {
-        desired_velocity.head(2) << in(position[0], position[1]);
         if (htop == inside)
         {
+            desired_velocity[0] = 0.0;
+            desired_velocity[1] = 0.0;
             desired_velocity[2] = -1.0; //down
         }
         else
         {
+            desired_velocity.head(2) << in(position[0], position[1]);
             desired_velocity[2] = 0.0;
         }
     }
@@ -140,13 +154,13 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Eigen::Vector3d orientation_error;
 
     // position velocity control
-    double velocity_gain = 100;
+    double velocity_gain = 5;
     force_applied.head(3) << velocity_gain * (desired_velocity - velocity.head(3));
 
     // orientation position control
     // orientation error
-    Eigen::Quaterniond orientation_d(1.0, 0.0, 0.0, 0.0);
-    const double rotational_stiffness = 10.0;
+    Eigen::Quaterniond orientation_d(0.0, 1.0, 0.0, 0.0); // w, x, y, z
+    const double rotational_stiffness = 5.0;
     const double rotational_damping = 2.0 * sqrt(rotational_stiffness);
 
     // "difference" quaternion
@@ -161,7 +175,10 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     // compute control
     Eigen::VectorXd tau_task(7), tau_d(7);
 
-    force_applied.tail(3) << rotational_stiffness * orientation_error;
+    force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
+
+    limitForce(force_applied);
+    //std::cout << "Force applied: " << force_applied << std::endl;
 
     // apply the computed force
     tau_task << jacobian.transpose() * force_applied;
