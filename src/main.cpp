@@ -1,5 +1,3 @@
-// Copyright (c) 2017 Franka Emika GmbH
-// Use of this source code is governed by the Apache-2.0 license, see LICENSE
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -16,6 +14,8 @@
 #include <franka/robot.h>
 
 #include "examples_common.h"
+#include "semantic_mpc_controller.h"
+
 
 namespace {
 template <class T, size_t N>
@@ -29,13 +29,7 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
 }  // anonymous namespace
 
 /**
- * @example joint_impedance_control.cpp
- * An example showing a joint impedance type control that executes a Cartesian motion in the shape
- * of a circle. The example illustrates how to use the internal inverse kinematics to map a
- * Cartesian trajectory to joint space. The joint space target is tracked by an impedance control
- * that additionally compensates coriolis terms using the libfranka model library. This example
- * also serves to compare commanded vs. measured torques. The results are printed from a separate
- * thread to avoid blocking print functions in the real-time loop.
+ * Panda experiment code.
  */
 
 int main(int argc, char** argv) {
@@ -44,17 +38,9 @@ int main(int argc, char** argv) {
     std::cerr << "Usage: " << argv[0] << " <robot-hostname>" << std::endl;
     return -1;
   }
-  // Set and initialize trajectory parameters.
-  const double radius = 0.05;
-  const double vel_max = 0.25;
-  const double acceleration_time = 2.0;
-  const double run_time = 20.0;
+
   // Set print rate for comparing commanded vs. measured torques.
   const double print_rate = 10.0;
-
-  double vel_current = 0.0;
-  double angle = 0.0;
-  double time = 0.0;
 
   // Initialize data fields for the print thread.
   struct {
@@ -64,7 +50,7 @@ int main(int argc, char** argv) {
     franka::RobotState robot_state;
     std::array<double, 7> gravity;
   } print_data{};
-  std::atomic_bool running{true};
+  std::atomic_bool running{true}; // flag indicating the status of the hardware
 
   // Start print thread.
   std::thread print_thread([print_rate, &print_data, &running]() {
@@ -125,80 +111,20 @@ int main(int argc, char** argv) {
     // Load the kinematics and dynamics model.
     franka::Model model = robot.loadModel();
 
-    std::array<double, 16> initial_pose;
-
-    // Define callback function to send Cartesian pose goals to get inverse kinematics solved.
-    auto cartesian_pose_callback = [=, &time, &vel_current, &running, &angle, &initial_pose](
-                                       const franka::RobotState& robot_state,
-                                       franka::Duration period) -> franka::CartesianPose {
-      // Update time.
-      time += period.toSec();
-
-      if (time == 0.0) {
-        // Read the initial pose to start the motion from in the first time step.
-        initial_pose = robot_state.O_T_EE_c;
-      }
-
-      // Compute Cartesian velocity.
-      if (vel_current < vel_max && time < run_time) {
-        vel_current += period.toSec() * std::fabs(vel_max / acceleration_time);
-      }
-      if (vel_current > 0.0 && time > run_time) {
-        vel_current -= period.toSec() * std::fabs(vel_max / acceleration_time);
-      }
-      vel_current = std::fmax(vel_current, 0.0);
-      vel_current = std::fmin(vel_current, vel_max);
-
-      // Compute new angle for our circular trajectory.
-      angle += period.toSec() * vel_current / std::fabs(radius);
-      if (angle > 2 * M_PI) {
-        angle -= 2 * M_PI;
-      }
-
-      // Compute relative y and z positions of desired pose.
-      double delta_y = radius * (1 - std::cos(angle));
-      double delta_z = radius * std::sin(angle);
-      franka::CartesianPose pose_desired = initial_pose;
-      pose_desired.O_T_EE[13] += delta_y;
-      pose_desired.O_T_EE[14] += delta_z;
-
-      // Send desired pose.
-      if (time >= run_time + acceleration_time) {
-        running = false;
-        return franka::MotionFinished(pose_desired);
-      }
-
-      return pose_desired;
-    };
-
-    // Set gains for the joint impedance control.
-    // Stiffness
-    const std::array<double, 7> k_gains = {{600.0, 600.0, 600.0, 600.0, 250.0, 150.0, 50.0}};
-    // Damping
-    const std::array<double, 7> d_gains = {{50.0, 50.0, 50.0, 50.0, 30.0, 25.0, 15.0}};
+    std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
 
     // Define callback for the joint torque control loop.
     std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
-        impedance_control_callback =
-            [&print_data, &model, k_gains, d_gains](
+        hardware_control_callback =
+            [&print_data, &model, &tau_d_input](
                 const franka::RobotState& state, franka::Duration /*period*/) -> franka::Torques {
       // Read current coriolis terms from model.
-      std::array<double, 7> coriolis = model.coriolis(state);
-
-      // Compute torque command from joint impedance control law.
-      // Note: The answer to our Cartesian pose inverse kinematics is always in state.q_d with one
-      // time step delay.
-      std::array<double, 7> tau_d_calculated;
-      for (size_t i = 0; i < 7; i++) {
-        tau_d_calculated[i] =
-            k_gains[i] * (state.q_d[i] - state.q[i]) - d_gains[i] * state.dq[i] + coriolis[i];
-      }
 
       // The following line is only necessary for printing the rate limited torque. As we activated
       // rate limiting for the control loop (activated by default), the torque would anyway be
       // adjusted!
       std::array<double, 7> tau_d_rate_limited =
-          franka::limitRate(franka::kMaxTorqueRate, tau_d_calculated, state.tau_J_d);
+          franka::limitRate(franka::kMaxTorqueRate, tau_d_input, state.tau_J_d);
 
       // Update data to print.
       if (print_data.mutex.try_lock()) {
@@ -214,7 +140,7 @@ int main(int argc, char** argv) {
     };
 
     // Start real-time control loop.
-    robot.control(impedance_control_callback, cartesian_pose_callback);
+    robot.control(hardware_control_callback);
 
   } catch (const franka::Exception& ex) {
     running = false;

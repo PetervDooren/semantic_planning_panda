@@ -25,7 +25,7 @@ add_library(examples_common STATIC
 )
 target_link_libraries(examples_common PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
-add_executable(run_test src/main.cpp)
+add_executable(run_test src/main.cpp src/semantic_mpc_controller.cpp)
 target_link_libraries(run_test PUBLIC
   Franka::Franka
   ${Eigen_LIBRARIES}
