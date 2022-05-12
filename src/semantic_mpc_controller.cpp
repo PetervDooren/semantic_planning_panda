@@ -2,63 +2,61 @@
 
 #include <iostream>
 
+// box dimensions
+#define BOX_X_POS 0.65
+#define BOX_Y_POS 0.0
+#define BOX_Z_POS 0.0
+#define BOX_WIDTH 0.4 //   Y Direction
+#define BOX_LENGTH 0.3 // x direction
+#define BOX_HEIGHT 0.25
+#define WALL_WIDTH 0.05
+#define FLOOR_HEIGHT 0.01
+
 enum HorizontalTopology{outside, over, inside};
 enum VerticalTopology{above, level, below};
 
 HorizontalTopology determineHorizontalTopology(double x, double y)
 {
-    // box dimensions
-    double box_x_pos = 0.65;
-    double box_y_pos = 0.0;
-    double box_z_pos = 0.0;
-    double box_length = 0.3; // x direction
-    double box_width = 0.4; // y direction
-    double wall_width = 0.01; // vertical wall width
-    double floor_height = 0.01;
-
-    x = std::abs(x-box_x_pos); // relative potition + symmetry
-    y = std::abs(y-box_y_pos); // relative position + symmetry
-    if (x > 0.5*box_length + wall_width || y > 0.5*box_width + wall_width)
+    x = std::abs(x-BOX_X_POS); // relative potition + symmetry
+    y = std::abs(y-BOX_Y_POS); // relative position + symmetry
+    if (x > 0.5*BOX_LENGTH + WALL_WIDTH || y > 0.5*BOX_WIDTH + WALL_WIDTH)
         return outside;
-    if (x < 0.5*box_length || y < 0.5*box_width)
+    if (x < 0.5*BOX_LENGTH || y < 0.5*BOX_WIDTH)
         return inside;
     return over;
 }
 
 VerticalTopology determineVerticalTopology(double z)
 {
-    // box dimensions
-    double box_z_pos = 0.0;
-    double box_height = 0.25;
-    double floor_height = 0.01;
-
-    z = z-box_z_pos; // relative potition
-    if (z > box_height)
+    z = z-BOX_Z_POS; // relative potition
+    if (z > BOX_HEIGHT)
         return above;
-    if (z > floor_height)
+    if (z > FLOOR_HEIGHT)
         return level;
     return below;
 }
 
 Eigen::Vector2d out(double x, double y)
 {
-    // TODO dirty copy of box parameters
-    double box_x_pos = 0.65;
-    double box_y_pos = 0.0;
+    double dx = x-BOX_X_POS;
+    double dy = y-BOX_Y_POS;
+    double dist = sqrt(dx*dx + dy*dy);
+
     Eigen::Vector2d outputvel;
-    outputvel[0] = 2.0* std::signbit(-x + box_x_pos) -1.0;
-    outputvel[1] = 2.0* std::signbit(-y + box_y_pos) -1.0;
+    outputvel[0] = dx/dist;
+    outputvel[1] = dy/dist;
     return outputvel;
 }
 
 Eigen::Vector2d in(double x, double y)
 {
-    // TODO dirty copy of box parameters
-    double box_x_pos = 0.65;
-    double box_y_pos = 0.0;
+    double dx = x-BOX_X_POS;
+    double dy = y-BOX_Y_POS;
+    double dist = sqrt(dx*dx + dy*dy);
+
     Eigen::Vector2d outputvel;
-    outputvel[0] = 2.0* std::signbit(x - box_x_pos) -1.0;
-    outputvel[1] = 2.0* std::signbit(y - box_y_pos) -1.0;
+    outputvel[0] = -dx/dist;
+    outputvel[1] = -dy/dist;
     return outputvel;
 }
 
@@ -103,11 +101,13 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     {
         if (htop != outside) // htop == inside || htop == over
         {
+            std::cout << "Topology is underneath the box" << std::endl;
             desired_velocity.head(2) << out(position[0], position[1]);
             desired_velocity[2] = 0.0;
         }
         else // htop == outside
         {
+            std::cout << "Topology is underneath and outside the box" << std::endl;
             desired_velocity[0] = 0.0;
             desired_velocity[1] = 0.0;
             desired_velocity[2] = 1.0; //up
@@ -117,12 +117,14 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     {
         if (htop == inside)
         {
+            std::cout << "Topology is over the box" << std::endl;
             desired_velocity[0] = 0.0;
             desired_velocity[1] = 0.0;
             desired_velocity[2] = -1.0; //down
         }
         else
         {
+            std::cout << "Topology is above the box" << std::endl;
             desired_velocity.head(2) << in(position[0], position[1]);
             desired_velocity[2] = 0.0;
         }
@@ -131,18 +133,21 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     {
         if (htop == inside)
         {
+            std::cout << "Topology is inside the box" << std::endl;
+            desired_velocity[0] = 0.0;
+            desired_velocity[1] = 0.0;
             desired_velocity[2] = -0.2; //down slowly
         }
         else if (htop == over)
         {
-            std::cerr << "Topology is both level and over, this cannot be true as it would imply collision!";
-            desired_velocity[0] = 0.0;
-            desired_velocity[1] = 0.0;
-            desired_velocity[2] = 0.0;
+            std::cerr << "Topology is both level and over, this cannot be true as it would imply collision!" << std::endl;
+            desired_velocity.head(2) << in(position[0], position[1]);
+            desired_velocity[2] = -0.2;
         }
         else // htop == outside
         {
             // #TODO equal to vtop == below && htop == outside
+            std::cout << "Topology is besides the box" << std::endl;
             desired_velocity[0] = 0.0;
             desired_velocity[1] = 0.0;
             desired_velocity[2] = 1.0;
@@ -156,13 +161,13 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Eigen::Vector3d orientation_error;
 
     // position velocity control
-    double velocity_gain = 5;
+    double velocity_gain = 10;
     force_applied.head(3) << velocity_gain * (desired_velocity - velocity.head(3));
 
     // orientation position control
     // orientation error
     Eigen::Quaterniond orientation_d(0.0, 1.0, 0.0, 0.0); // w, x, y, z
-    const double rotational_stiffness = 5.0;
+    const double rotational_stiffness = 15.0;
     const double rotational_damping = 2.0 * sqrt(rotational_stiffness);
 
     // "difference" quaternion
@@ -180,7 +185,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
 
     limitForce(force_applied);
-    std::cout << "Force applied: " << force_applied << std::endl;
+    //std::cout << "Force applied: " << force_applied << std::endl;
 
     // apply the computed force
     tau_task << jacobian.transpose() * force_applied;
