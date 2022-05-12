@@ -8,11 +8,11 @@ enum VerticalTopology{above, level, below};
 HorizontalTopology determineHorizontalTopology(double x, double y)
 {
     // box dimensions
-    double box_x_pos = 0.5;
+    double box_x_pos = 0.65;
     double box_y_pos = 0.0;
     double box_z_pos = 0.0;
-    double box_length = 0.4; // x direction
-    double box_width = 0.6; // y direction
+    double box_length = 0.3; // x direction
+    double box_width = 0.4; // y direction
     double wall_width = 0.01; // vertical wall width
     double floor_height = 0.01;
 
@@ -29,7 +29,7 @@ VerticalTopology determineVerticalTopology(double z)
 {
     // box dimensions
     double box_z_pos = 0.0;
-    double box_height = 0.3;
+    double box_height = 0.25;
     double floor_height = 0.01;
 
     z = z-box_z_pos; // relative potition
@@ -43,22 +43,22 @@ VerticalTopology determineVerticalTopology(double z)
 Eigen::Vector2d out(double x, double y)
 {
     // TODO dirty copy of box parameters
-    double box_x_pos = 0.5;
+    double box_x_pos = 0.65;
     double box_y_pos = 0.0;
     Eigen::Vector2d outputvel;
-    outputvel[0] = 2.0* std::signbit(x - box_x_pos) -1.0;
-    outputvel[1] = 2.0* std::signbit(y - box_y_pos) -1.0;
+    outputvel[0] = 2.0* std::signbit(-x + box_x_pos) -1.0;
+    outputvel[1] = 2.0* std::signbit(-y + box_y_pos) -1.0;
     return outputvel;
 }
 
 Eigen::Vector2d in(double x, double y)
 {
     // TODO dirty copy of box parameters
-    double box_x_pos = 0.5;
+    double box_x_pos = 0.65;
     double box_y_pos = 0.0;
     Eigen::Vector2d outputvel;
-    outputvel[0] = 2.0* std::signbit(-x + box_x_pos) -1.0;
-    outputvel[1] = 2.0* std::signbit(-y + box_y_pos) -1.0;
+    outputvel[0] = 2.0* std::signbit(x - box_x_pos) -1.0;
+    outputvel[1] = 2.0* std::signbit(y - box_y_pos) -1.0;
     return outputvel;
 }
 
@@ -95,7 +95,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     HorizontalTopology htop = determineHorizontalTopology(position[0], position[1]);
     VerticalTopology vtop = determineVerticalTopology(position[2]);
 
-    //std::cout << "htop: " << htop << " , vtop: " << vtop << std::endl;
+    std::cout << "htop: " << htop << " , vtop: " << vtop << std::endl;
 
     // control law based on this state
     Eigen::Vector3d desired_velocity;
@@ -149,6 +149,8 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
         }
     }
 
+    std::cout << "desired velocity: " << desired_velocity << std::endl;
+
     // calculate applied force
     Eigen::Matrix<double, 6, 1> force_applied;
     Eigen::Vector3d orientation_error;
@@ -178,7 +180,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
 
     limitForce(force_applied);
-    //std::cout << "Force applied: " << force_applied << std::endl;
+    std::cout << "Force applied: " << force_applied << std::endl;
 
     // apply the computed force
     tau_task << jacobian.transpose() * force_applied;
