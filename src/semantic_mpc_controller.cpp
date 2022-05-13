@@ -6,14 +6,17 @@
 #define BOX_X_POS 0.65
 #define BOX_Y_POS 0.0
 #define BOX_Z_POS 0.0
-#define BOX_WIDTH 0.4 //   Y Direction
-#define BOX_LENGTH 0.3 // x direction
-#define BOX_HEIGHT 0.25
-#define WALL_WIDTH 0.05
+#define BOX_WIDTH 0.35 //   Y Direction
+#define BOX_LENGTH 0.25 // x direction
+#define BOX_HEIGHT 0.30
+#define WALL_WIDTH 0.15
 #define FLOOR_HEIGHT 0.01
+#define TARGET_HEIGHT 0.15
 
 enum HorizontalTopology{outside, over, inside};
-enum VerticalTopology{above, level, below};
+enum VerticalTopology{above, level, target, below};
+
+enum Topology{in_box, over_box, above_box, next_to_box, below_box, near_wall};
 
 HorizontalTopology determineHorizontalTopology(double x, double y)
 {
@@ -21,7 +24,7 @@ HorizontalTopology determineHorizontalTopology(double x, double y)
     y = std::abs(y-BOX_Y_POS); // relative position + symmetry
     if (x > 0.5*BOX_LENGTH + WALL_WIDTH || y > 0.5*BOX_WIDTH + WALL_WIDTH)
         return outside;
-    if (x < 0.5*BOX_LENGTH || y < 0.5*BOX_WIDTH)
+    if (x < 0.5*BOX_LENGTH && y < 0.5*BOX_WIDTH)
         return inside;
     return over;
 }
@@ -31,9 +34,31 @@ VerticalTopology determineVerticalTopology(double z)
     z = z-BOX_Z_POS; // relative potition
     if (z > BOX_HEIGHT)
         return above;
-    if (z > FLOOR_HEIGHT)
+    if (z > TARGET_HEIGHT)
         return level;
+    if (z > FLOOR_HEIGHT)
+        return target;
     return below;
+}
+
+Topology determineTopology(double x, double y, double z)
+{
+    HorizontalTopology htop = determineHorizontalTopology(x, y);
+    VerticalTopology vtop = determineVerticalTopology(z);
+    std::cout << "htop: " << htop << "vtop: " << vtop << std::endl;
+
+    if (htop == over && (vtop == level || vtop == target))
+        return near_wall;
+
+    if (htop == inside && vtop == target)
+        return in_box;
+    if ((htop == inside && (vtop == above || vtop == level)))
+        return over_box;
+    if (vtop == above)
+        return above_box;
+    if (htop == outside)
+        return next_to_box;
+    return below_box;
 }
 
 Eigen::Vector2d out(double x, double y)
@@ -57,6 +82,29 @@ Eigen::Vector2d in(double x, double y)
     Eigen::Vector2d outputvel;
     outputvel[0] = -dx/dist;
     outputvel[1] = -dy/dist;
+    return outputvel;
+}
+
+Eigen::Vector2d avoid_wall(double x, double y)
+{
+
+
+    // x velocity
+    double dx = x-BOX_X_POS;
+    bool x_in = std::abs(dx) < 0.5*(BOX_LENGTH + WALL_WIDTH);
+
+    // y velocity
+    double dy = y-BOX_Y_POS;
+    bool y_in = std::abs(dy) < 0.5*(BOX_WIDTH + WALL_WIDTH);
+
+    Eigen::Vector2d outputvel = out(x, y); // outward motion
+
+    if (x_in)
+        outputvel[0] = -outputvel[0];
+
+    if (y_in)
+        outputvel[1] = -outputvel[1];
+
     return outputvel;
 }
 
@@ -90,68 +138,48 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Eigen::Matrix<double, 6, 1> velocity = jacobian * dq;
 
     // determine the semantic state of the robot
-    HorizontalTopology htop = determineHorizontalTopology(position[0], position[1]);
-    VerticalTopology vtop = determineVerticalTopology(position[2]);
+    Topology top = determineTopology(position[0], position[1], position[2]);
 
-    std::cout << "htop: " << htop << " , vtop: " << vtop << std::endl;
+    std::cout << "top: " << top << std::endl;
 
     // control law based on this state
     Eigen::Vector3d desired_velocity;
-    if(vtop == below)
+
+    switch(top)
     {
-        if (htop != outside) // htop == inside || htop == over
-        {
-            std::cout << "Topology is underneath the box" << std::endl;
-            desired_velocity.head(2) << out(position[0], position[1]);
-            desired_velocity[2] = 0.0;
-        }
-        else // htop == outside
-        {
-            std::cout << "Topology is underneath and outside the box" << std::endl;
-            desired_velocity[0] = 0.0;
-            desired_velocity[1] = 0.0;
-            desired_velocity[2] = 1.0; //up
-        }
-    }
-    else if(vtop == above)
-    {
-        if (htop == inside)
-        {
-            std::cout << "Topology is over the box" << std::endl;
-            desired_velocity[0] = 0.0;
-            desired_velocity[1] = 0.0;
-            desired_velocity[2] = -1.0; //down
-        }
-        else
-        {
-            std::cout << "Topology is above the box" << std::endl;
-            desired_velocity.head(2) << in(position[0], position[1]);
-            desired_velocity[2] = 0.0;
-        }
-    }
-    else if (vtop == level)
-    {
-        if (htop == inside)
-        {
-            std::cout << "Topology is inside the box" << std::endl;
-            desired_velocity[0] = 0.0;
-            desired_velocity[1] = 0.0;
-            desired_velocity[2] = -0.2; //down slowly
-        }
-        else if (htop == over)
-        {
-            std::cerr << "Topology is both level and over, this cannot be true as it would imply collision!" << std::endl;
-            desired_velocity.head(2) << in(position[0], position[1]);
-            desired_velocity[2] = -0.2;
-        }
-        else // htop == outside
-        {
-            // #TODO equal to vtop == below && htop == outside
-            std::cout << "Topology is besides the box" << std::endl;
-            desired_velocity[0] = 0.0;
-            desired_velocity[1] = 0.0;
-            desired_velocity[2] = 1.0;
-        }
+    case in_box:
+        std::cout << "topology: in_box" << std::endl;
+        desired_velocity[0] = 0.0;
+        desired_velocity[1] = 0.0;
+        desired_velocity[2] = 0.0; //down
+        break;
+    case over_box:
+        std::cout << "topology: over_box" << std::endl;
+        desired_velocity[0] = 0.0;
+        desired_velocity[1] = 0.0;
+        desired_velocity[2] = -1.0; //down
+        break;
+    case above_box:
+        std::cout << "topology: above_box" << std::endl;
+        desired_velocity.head(2) << in(position[0], position[1]);
+        desired_velocity[2] = 0.0;
+        break;
+    case next_to_box:
+        std::cout << "topology: next_to_box" << std::endl;
+        desired_velocity[0] = 0.0;
+        desired_velocity[1] = 0.0;
+        desired_velocity[2] = 1.0;
+        break;
+    case below_box:
+        std::cout << "topology: below_box" << std::endl;
+        desired_velocity.head(2) << out(position[0], position[1]);
+        desired_velocity[2] = 0.0;
+        break;
+    case near_wall:
+        std::cout << "topology: near_wall" << std::endl;
+        desired_velocity.head(2) << avoid_wall(position[0], position[1]);
+        desired_velocity[2] = 0.0;
+        break;
     }
 
     std::cout << "desired velocity: " << desired_velocity << std::endl;
