@@ -143,15 +143,21 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     std::cout << "top: " << top << std::endl;
 
     // control law based on this state
+    bool use_velocity_control = true;
     Eigen::Vector3d desired_velocity;
+
+    bool use_force_control = false;
+    Eigen::Vector3d desired_force;
 
     switch(top)
     {
     case in_box:
         std::cout << "topology: in_box" << std::endl;
-        desired_velocity[0] = 0.0;
-        desired_velocity[1] = 0.0;
-        desired_velocity[2] = 0.0; //down
+        use_velocity_control = false;
+        use_force_control = true;
+        desired_force[0] = -3.0;
+        desired_force[1] = -3.0;
+        desired_force[2] = 0.0;
         break;
     case over_box:
         std::cout << "topology: over_box" << std::endl;
@@ -182,15 +188,30 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
         break;
     }
 
-    std::cout << "desired velocity: " << desired_velocity << std::endl;
+
 
     // calculate applied force
     Eigen::Matrix<double, 6, 1> force_applied;
     Eigen::Vector3d orientation_error;
 
     // position velocity control
-    double velocity_gain = 10;
-    force_applied.head(3) << velocity_gain * (desired_velocity - velocity.head(3));
+    if (use_velocity_control){
+        std::cout << "desired velocity: " << desired_velocity << std::endl;
+        double velocity_gain = 10;
+        force_applied.head(3) << velocity_gain * (desired_velocity - velocity.head(3));
+    }
+    else if(use_force_control)
+    {
+        std::cout << "desired force: " << desired_force << std::endl;
+        force_applied.head(3) << desired_force;
+    }
+    else
+    {
+        std::cout << "Unknown control method specified: default to no force applied" << std::endl;
+        force_applied[0] = 0.0;
+        force_applied[1] = 0.0;
+        force_applied[2] = 0.0;
+    }
 
     // orientation position control
     // orientation error
