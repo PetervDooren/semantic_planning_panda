@@ -32,3 +32,11 @@ target_link_libraries(run_test PUBLIC
   Threads::Threads
   examples_common
 )
+
+add_executable(detect_collisions src/main_collision_detection.cpp src/velocity_control.cpp)
+target_link_libraries(detect_collisions PUBLIC
+  Franka::Franka
+  ${Eigen_LIBRARIES}
+  Threads::Threads
+  examples_common
+)
