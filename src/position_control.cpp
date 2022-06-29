@@ -4,7 +4,7 @@
 #include <math.h>
 
 
-void limitForce(Eigen::Matrix<double, 6, 1> force)
+void limitForcePC(Eigen::Matrix<double, 6, 1> force)
 {
     double max_F = 10.0;
     double max_torque = 10.0;
@@ -39,7 +39,7 @@ std::array<double, 7> PositionController::controlLaw(const franka::RobotState& r
 
     // position control
     double position_gain = 150;
-    double damping = 2*sqrt(position_gain);
+    double damping = 20*sqrt(position_gain);
     force_applied.head(3) << position_gain * (desired_position - position.head(3)) - damping * velocity.head(3);
 
     // orientation position control
@@ -62,7 +62,7 @@ std::array<double, 7> PositionController::controlLaw(const franka::RobotState& r
 
     force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
 
-    limitForce(force_applied);
+    limitForcePC(force_applied);
     //std::cout << "Force applied: " << force_applied << std::endl;
 
     // apply the computed force

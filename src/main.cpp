@@ -32,7 +32,7 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
 }  // anonymous namespace
 
 enum State{
-    FREE_SPACE,
+    FREE_SPACE = 0,
     MAKING_CONTACT,
     COMPLIANT_MOTION,
     FINISHED
@@ -59,6 +59,7 @@ int main(int argc, char** argv) {
     std::array<double, 7> tau_d_last;
     franka::RobotState robot_state;
     std::array<double, 7> gravity;
+    State fsmState;
   } print_data{};
   std::atomic_bool running{true}; // flag indicating the status of the hardware
 
@@ -78,8 +79,7 @@ int main(int argc, char** argv) {
           }
 
           // Print data to console
-          std::cout << "tau_commanded [Nm]: " << tau_d_actual << std::endl
-                    << "tau_measured [Nm]: " << print_data.robot_state.tau_J << std::endl
+          std::cout << "state: " << print_data.fsmState << std::endl
                     << "-----------------------" << std::endl;
           print_data.has_data = false;
         }
@@ -150,20 +150,19 @@ int main(int argc, char** argv) {
         std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
 
         Eigen::Vector3d desired_position = {0.65, 0, 0.15};
-        Eigen::Vector3d desired_velocity = {0, 0, -0.1};
+        Eigen::Vector3d desired_velocity = {0, 0, -0.2};
 
         switch(fsmState){
         case FREE_SPACE:
             tau_d_input = positionControl.controlLaw(state, period, desired_position);
             break;
         case MAKING_CONTACT:
-            tau_d_input = positionControl.controlLaw(state, period, desired_position);
+            tau_d_input = velocityControl.controlLaw(state, period, desired_velocity);
             break;
         case COMPLIANT_MOTION:
-            tau_d_input = positionControl.controlLaw(state, period, desired_position);
+            tau_d_input = compliantControl.controlLaw(state, period);
             break;
         case FINISHED:
-            tau_d_input = positionControl.controlLaw(state, period, desired_position);
             break;
 
         }
@@ -180,6 +179,7 @@ int main(int argc, char** argv) {
         print_data.robot_state = state;
         print_data.tau_d_last = tau_d_rate_limited;
         print_data.gravity = model.gravity(state);
+        print_data.fsmState = fsmState;
         print_data.mutex.unlock();
       }
 

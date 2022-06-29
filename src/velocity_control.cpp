@@ -3,7 +3,7 @@
 #include <iostream>
 
 
-void limitForce(Eigen::Matrix<double, 6, 1> force)
+void limitForceVC(Eigen::Matrix<double, 6, 1> force)
 {
     double max_F = 10.0;
     double max_torque = 10.0;
@@ -60,7 +60,7 @@ std::array<double, 7> VelocityController::controlLaw(const franka::RobotState& r
 
     force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
 
-    limitForce(force_applied);
+    limitForceVC(force_applied);
     //std::cout << "Force applied: " << force_applied << std::endl;
 
     // apply the computed force

@@ -4,7 +4,7 @@
 #include <math.h>
 
 
-void limitForce(Eigen::Matrix<double, 6, 1> force)
+void limitForceCC(Eigen::Matrix<double, 6, 1> force)
 {
     double max_F = 10.0;
     double max_torque = 10.0;
@@ -38,11 +38,12 @@ std::array<double, 7> CompliantController::controlLaw(const franka::RobotState& 
     Eigen::Vector3d orientation_error;
 
     // position control
-    double velocity_gain = 50;
+    Eigen::Vector3d desired_velocity = {-0.1, 0, 0};
+    double velocity_gain = 100;
     force_applied.head(3) << velocity_gain * (desired_velocity - velocity.head(3));
 
     // #TODO hardcoded compliant direction
-    force_applied[0] = 0.0 // x
+    force_applied[2] = -0.5; // x
 
 
     // orientation position control
@@ -65,7 +66,7 @@ std::array<double, 7> CompliantController::controlLaw(const franka::RobotState& 
 
     force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
 
-    limitForce(force_applied);
+    limitForceCC(force_applied);
     //std::cout << "Force applied: " << force_applied << std::endl;
 
     // apply the computed force
