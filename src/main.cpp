@@ -15,6 +15,9 @@
 
 #include "examples_common.h"
 #include "semantic_mpc_controller.h"
+#include "position_control.h"
+#include "velocity_control.h"
+#include "compliant_control.h"
 
 
 namespace {
@@ -27,6 +30,13 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
   return ostream;
 }
 }  // anonymous namespace
+
+enum State{
+    FREE_SPACE,
+    MAKING_CONTACT,
+    COMPLIANT_MOTION,
+    FINISHED
+};
 
 /**
  * Panda experiment code.
@@ -103,7 +113,11 @@ int main(int argc, char** argv) {
 
     // Load the kinematics and dynamics model.
     franka::Model model = robot.loadModel();
-    ModelPredictiveController MPCControl(&model);
+    VelocityController velocityControl(&model);
+    PositionController positionControl(&model);
+    CompliantController compliantControl(&model);
+
+    State fsmState = FREE_SPACE;
 
     /*
     franka::RobotState initial_state = robot.readOnce();
@@ -117,13 +131,29 @@ int main(int argc, char** argv) {
     // Define callback for the joint torque control loop.
     std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
         hardware_control_callback =
-            [&print_data, &model, &MPCControl](
+            [&print_data, &model, &fsmState, &velocityControl, &positionControl, &compliantControl](
                 const franka::RobotState& state, franka::Duration period) -> franka::Torques {
       // Read current coriolis terms from model.
+        std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
 
-      std::array<double, 7> tau_d_input = MPCControl.controlLaw(state, period);
+        Eigen::Vector3d desired_position = {0.65, 0, 0.15};
+        Eigen::Vector3d desired_velocity = {0, 0, -0.1};
 
-      //tau_d_input = {0, 0, 0, 0, 0, 0, 0};
+        switch(fsmState){
+        case FREE_SPACE:
+            tau_d_input = positionControl.controlLaw(state, period, desired_position);
+            break;
+        case MAKING_CONTACT:
+            tau_d_input = positionControl.controlLaw(state, period, desired_position);
+            break;
+        case COMPLIANT_MOTION:
+            tau_d_input = positionControl.controlLaw(state, period, desired_position);
+            break;
+        case FINISHED:
+            tau_d_input = positionControl.controlLaw(state, period, desired_position);
+            break;
+
+        }
 
       // The following line is only necessary for printing the rate limited torque. As we activated
       // rate limiting for the control loop (activated by default), the torque would anyway be
