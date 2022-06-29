@@ -127,12 +127,25 @@ int main(int argc, char** argv) {
     std::cout << "initial position: " << init_position << std::endl;
     std::cout << "initial orientation: " << initial_orientation.coeffs() << std::endl;
     */
+    double time = 0.0;
 
     // Define callback for the joint torque control loop.
     std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
         hardware_control_callback =
-            [&print_data, &model, &fsmState, &velocityControl, &positionControl, &compliantControl](
+            [&time, &print_data, &model, &fsmState, &velocityControl, &positionControl, &compliantControl](
                 const franka::RobotState& state, franka::Duration period) -> franka::Torques {
+
+        time += period.toSec();
+
+        if (time < 5.0)
+            fsmState = FREE_SPACE;
+        else if (time < 10.0)
+            fsmState = MAKING_CONTACT;
+        else if (time < 15.0)
+            fsmState = COMPLIANT_MOTION;
+        else
+            fsmState = FINISHED;
+
       // Read current coriolis terms from model.
         std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
 
