@@ -18,6 +18,7 @@
 #include "position_control.h"
 #include "velocity_control.h"
 #include "compliant_control.h"
+#include "tube_control.h"
 
 
 namespace {
@@ -33,8 +34,7 @@ std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
 
 enum State{
     FREE_SPACE = 0,
-    MAKING_CONTACT,
-    COMPLIANT_MOTION,
+    TUBE_CONTROL,
     FINISHED
 };
 
@@ -68,22 +68,22 @@ int main(int argc, char** argv) {
     while (running) {
       // Sleep to achieve the desired print rate.
       std::this_thread::sleep_for(
-          std::chrono::milliseconds(static_cast<int>((1.0 / print_rate * 1000.0))));
+                  std::chrono::milliseconds(static_cast<int>((1.0 / print_rate * 1000.0))));
 
       // Try to lock data to avoid read write collisions.
       if (print_data.mutex.try_lock()) {
-        if (print_data.has_data) {
-          std::array<double, 7> tau_d_actual{};
-          for (size_t i = 0; i < 7; ++i) {
-            tau_d_actual[i] = print_data.tau_d_last[i] + print_data.gravity[i];
-          }
+          if (print_data.has_data) {
 
-          // Print data to console
-          std::cout << "state: " << print_data.fsmState << std::endl
-                    << "-----------------------" << std::endl;
-          print_data.has_data = false;
-        }
-        print_data.mutex.unlock();
+              Eigen::Affine3d transform(Eigen::Matrix4d::Map(print_data.robot_state.O_T_EE.data()));
+              Eigen::Vector3d position(transform.translation());
+
+              // Print data to console
+              std::cout << "state: " << print_data.fsmState << std::endl
+                        << "-----------------------" << std::endl;
+              std::cout << "Position [m]: " << position << std::endl;
+              print_data.has_data = false;
+          }
+          print_data.mutex.unlock();
       }
     }
   });
@@ -116,6 +116,10 @@ int main(int argc, char** argv) {
     VelocityController velocityControl(&model);
     PositionController positionControl(&model);
     CompliantController compliantControl(&model);
+    TubeController tubeControl(&model);
+
+    double desired_velocity = 0.2;
+    tubeControl.setvelocity(desired_velocity);
 
     State fsmState = FREE_SPACE;
 
@@ -124,43 +128,37 @@ int main(int argc, char** argv) {
     // Define callback for the joint torque control loop.
     std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
         hardware_control_callback =
-            [&time, &print_data, &model, &fsmState, &velocityControl, &positionControl, &compliantControl](
+            [&time, &print_data, &model, &fsmState, &velocityControl, &positionControl, &compliantControl, &tubeControl, &desired_velocity](
                 const franka::RobotState& state, franka::Duration period) -> franka::Torques {
 
         time += period.toSec();
 
-        if (time < 5.0)
+        if (time < 2.0)
             fsmState = FREE_SPACE;
-        else if (time < 10.0)
-            fsmState = MAKING_CONTACT;
-        else if (time < 15.0)
-            fsmState = COMPLIANT_MOTION;
+        else if (time < 6.0)
+            fsmState = TUBE_CONTROL;
         else
             fsmState = FINISHED;
 
         std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
 
-        Eigen::Vector3d desired_position = {0.65, 0, 0.15};
-        Eigen::Vector3d desired_velocity = {0, 0, -0.2};
+        Eigen::Vector3d desired_position = {0.65, -0.3, 0.15};
 
         switch(fsmState){
         case FREE_SPACE:
             tau_d_input = positionControl.controlLaw(state, period, desired_position);
             break;
-        case MAKING_CONTACT:
-            tau_d_input = velocityControl.controlLaw(state, period, desired_velocity);
-            break;
-        case COMPLIANT_MOTION:
-            tau_d_input = compliantControl.controlLaw(state, period);
+        case TUBE_CONTROL:
+            tau_d_input = tubeControl.controlLaw(state, period);
             break;
         case FINISHED:
+            desired_velocity = -desired_velocity;
+            tubeControl.setvelocity(desired_velocity);
+            time = 2.0; // reset
             break;
 
         }
 
-      // The following line is only necessary for printing the rate limited torque. As we activated
-      // rate limiting for the control loop (activated by default), the torque would anyway be
-      // adjusted!
       std::array<double, 7> tau_d_rate_limited =
           franka::limitRate(franka::kMaxTorqueRate, tau_d_input, state.tau_J_d);
 
