@@ -25,18 +25,27 @@ add_library(examples_common STATIC
 )
 target_link_libraries(examples_common PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
-add_executable(run_test src/main.cpp src/semantic_mpc_controller.cpp)
-target_link_libraries(run_test PUBLIC
-  Franka::Franka
-  ${Eigen_LIBRARIES}
-  Threads::Threads
-  examples_common
+add_library(my_library STATIC
+  src/position_control.cpp
+  src/velocity_control.cpp
+  src/tube_control.cpp
+  src/compliant_control.cpp
 )
+target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
-add_executable(detect_collisions src/main_collision_detection.cpp src/velocity_control.cpp)
-target_link_libraries(detect_collisions PUBLIC
+#add_executable(run_test src/main.cpp src/semantic_mpc_controller.cpp)
+#target_link_libraries(run_test PUBLIC
+#  Franka::Franka
+#  ${Eigen_LIBRARIES}
+#  Threads::Threads
+#  examples_common
+#)
+
+add_executable(topo_planner src/main_topo_planner.cpp)
+target_link_libraries(topo_planner PUBLIC
   Franka::Franka
   ${Eigen_LIBRARIES}
   Threads::Threads
   examples_common
+  my_library
 )
