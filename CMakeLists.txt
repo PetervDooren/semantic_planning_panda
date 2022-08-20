@@ -4,7 +4,11 @@ project(semantic_planning_panda)
 #set(CMAKE_CXX_STANDARD 14)
 #set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(catkin REQUIRED COMPONENTS cmake_modules)
+find_package(catkin REQUIRED COMPONENTS
+    cmake_modules
+    roscpp
+    kdl_parser
+    )
 
 find_package(Eigen REQUIRED)
 find_package(Franka REQUIRED)
@@ -19,7 +23,11 @@ catkin_package(
     DEPENDS Eigen
     )
 
-include_directories( ${Eigen_INCLUDE_DIRS} )
+include_directories(
+    ${catkin_INCLUDE_DIRS}
+    ${Eigen_INCLUDE_DIRS}
+    )
+
 add_library(examples_common STATIC
   src/examples_common.cpp
 )
@@ -41,10 +49,11 @@ target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 #  examples_common
 #)
 
-add_executable(topo_planner src/main_topo_planner.cpp)
-target_link_libraries(topo_planner PUBLIC
+add_executable(main src/main_vereshchagin.cpp)
+target_link_libraries(main PUBLIC
   Franka::Franka
   ${Eigen_LIBRARIES}
+  ${catkin_LIBRARIES}
   Threads::Threads
   examples_common
   my_library
