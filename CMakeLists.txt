@@ -39,16 +39,9 @@ add_library(my_library STATIC
   src/velocity_control.cpp
   src/tube_control.cpp
   src/compliant_control.cpp
+  src/data_saver.cpp
 )
 target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
-
-#add_executable(run_test src/main.cpp src/semantic_mpc_controller.cpp)
-#target_link_libraries(run_test PUBLIC
-#  Franka::Franka
-#  ${Eigen_LIBRARIES}
-#  Threads::Threads
-#  examples_common
-#)
 
 add_executable(main src/main_vereshchagin.cpp)
 target_link_libraries(main PUBLIC

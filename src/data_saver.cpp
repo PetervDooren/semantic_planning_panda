@@ -1,6 +1,18 @@
 #include "data_saver.h"
 
 #include <iostream>
+#include <iterator>
+
+namespace {
+template <class T, size_t N>
+std::ostream& operator<<(std::ostream& ostream, const std::array<T, N>& array) {
+    ostream << "[";
+    std::copy(array.cbegin(), array.cend() - 1, std::ostream_iterator<T>(ostream, ","));
+    std::copy(array.cend() - 1, array.cend(), std::ostream_iterator<T>(ostream));
+    ostream << "]";
+    return ostream;
+}
+}  // anonymous namespace
 
 void printJntArray(KDL::JntArray& q)
 {
@@ -89,12 +101,11 @@ void DataSaver::printData()
     std::cout << "beta" << std::endl;
     printJntArray(beta);
 
-    std::cout << "f_ext" << std::endl;
+    std::cout << "external forces" << std::endl;
     printWrenches(f_ext);
 
-    std::cout << "ff_torques" << std::endl;
+    std::cout << "feedforward torques" << std::endl;
     printJntArray(ff_torques);
 
-    std::cout << "input_torques" << std::endl;
-    printJntArray(tau_input);
+    std::cout << "desired torques" << tau_input << std::endl;
 }

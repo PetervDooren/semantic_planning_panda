@@ -3,7 +3,6 @@
 #include <cmath>
 #include <functional>
 #include <iostream>
-#include <iterator>
 #include <mutex>
 #include <thread>
 
@@ -25,6 +24,8 @@
 #include "position_control.h"
 #include "velocity_control.h"
 #include "compliant_control.h"
+
+#include "data_saver.h"
 
 
 namespace {
@@ -97,38 +98,19 @@ int main(int argc, char** argv) {
     const double print_rate = 10.0;
 
     // Initialize data fields for the print thread.
-    struct {
-        std::mutex mutex;
-        bool has_data;
-        std::array<double, 7> tau_d_last;
-        franka::RobotState robot_state;
-        std::array<double, 7> gravity;
-        State fsmState;
-    } print_data{};
+    DataSaver data_saver;
     std::atomic_bool running{true}; // flag indicating the status of the hardware
 
     // Start print thread.
-    std::thread print_thread([print_rate, &print_data, &running]() {
+    std::thread print_thread([print_rate, &data_saver, &running]() {
         while (running) {
             // Sleep to achieve the desired print rate.
             std::this_thread::sleep_for(
                         std::chrono::milliseconds(static_cast<int>((1.0 / print_rate * 1000.0))));
 
-            // Try to lock data to avoid read write collisions.
-            if (print_data.mutex.try_lock()) {
-                if (print_data.has_data) {
-                    std::array<double, 7> tau_d_actual{};
-                    for (size_t i = 0; i < 7; ++i) {
-                        tau_d_actual[i] = print_data.tau_d_last[i] + print_data.gravity[i];
-                    }
-
-                    // Print data to console
-                    std::cout << "state: " << print_data.fsmState << std::endl
-                              << "-----------------------" << std::endl;
-                    print_data.has_data = false;
-                }
-                print_data.mutex.unlock();
-            }
+            // Print data to screen
+            if (data_saver.has_data)
+                data_saver.printData();
         }
     });
 
@@ -157,9 +139,6 @@ int main(int argc, char** argv) {
 
         // Load the kinematics and dynamics model.
         franka::Model model = robot.loadModel();
-        VelocityController velocityControl(&model);
-        PositionController positionControl(&model);
-        CompliantController compliantControl(&model);
 
         State fsmState = FREE_SPACE;
 
@@ -168,7 +147,7 @@ int main(int argc, char** argv) {
         // Define callback for the joint torque control loop.
         std::function<franka::Torques(const franka::RobotState&, franka::Duration)>
                 hardware_control_callback =
-                [&time, &print_data, &model, &fsmState, &my_solver](
+                [&time, &data_saver, &model, &fsmState, &my_solver](
                 const franka::RobotState& state, franka::Duration period) -> franka::Torques {
 
             time += period.toSec();
@@ -212,13 +191,7 @@ int main(int argc, char** argv) {
             }
 
             // Update data to print.
-            if (print_data.mutex.try_lock()) {
-                print_data.has_data = true;
-                print_data.robot_state = state;
-                print_data.gravity = model.gravity(state);
-                print_data.fsmState = fsmState;
-                print_data.mutex.unlock();
-            }
+            data_saver.setData(state, fsmState, tau_d_input, alpha, beta, f_ext, ff_torques);
 
             // Send torque command.
             return tau_d_input;
