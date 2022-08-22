@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
     cmake_modules
     roscpp
     kdl_parser
+    orocos_kdl
     )
 
 find_package(Eigen REQUIRED)
