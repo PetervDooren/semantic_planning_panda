@@ -204,10 +204,12 @@ int main(int argc, char** argv) {
             //my_solver.getTransformedLinkAcceleration(x_dotdot);
             my_solver.getTotalTorque(total_torques);
 
-            std::array<double, 7> tau_d_input;
-            std::array<double, 7> tau_gravity = model.gravity(state); // gravity is already compensated in the panda interface
-            for (uint i=0; i<tau_d_input.size(); i++)
-                tau_d_input[i] = total_torques(i) -tau_gravity[i];
+            std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
+            if (result == 0){
+                std::array<double, 7> tau_gravity = model.gravity(state); // gravity is already compensated in the panda interface
+                for (uint i=0; i<tau_d_input.size(); i++)
+                    tau_d_input[i] = total_torques(i) -tau_gravity[i];
+            }
 
             // Update data to print.
             if (print_data.mutex.try_lock()) {
