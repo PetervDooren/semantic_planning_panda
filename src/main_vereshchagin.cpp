@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
     uint nc = 6;
 
     KDL::Twist root_acc = KDL::Twist::Zero();
-    root_acc[2] = 9.81; // set gravity
+    root_acc[2] = 0.0;//9.81; // set gravity
     KDL::ChainHdSolver_Vereshchagin my_solver(my_chain, root_acc, nc);
 
     // Set print rate for comparing commanded vs. measured torques.
@@ -167,7 +167,14 @@ int main(int argc, char** argv) {
                     q_dot(i) = state.dq[i];
 
             KDL::Jacobian alpha(nc);
+            alpha.setColumn(0, KDL::Twist(KDL::Vector(1, 0, 0), KDL::Vector(0,0,0)));
+            alpha.setColumn(1, KDL::Twist(KDL::Vector(0, 1, 0), KDL::Vector(0,0,0)));
+            alpha.setColumn(2, KDL::Twist(KDL::Vector(0, 0, 1), KDL::Vector(0,0,0)));
+            alpha.setColumn(3, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(1,0,0)));
+            alpha.setColumn(4, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(0,1,0)));
+            alpha.setColumn(5, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(0,0,1)));
             KDL::JntArray beta(nc);
+            beta(2) = 1.0;
             KDL::Wrenches f_ext(ns);
             KDL::JntArray ff_torques(nj);
 
@@ -200,9 +207,9 @@ int main(int argc, char** argv) {
         robot.control(hardware_control_callback);
 
     } catch (const franka::Exception& ex) {
-        running = false;
         std::cerr << ex.what() << std::endl;
     }
+    running = false;
 
     if (print_thread.joinable()) {
         print_thread.join();

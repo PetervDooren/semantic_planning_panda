@@ -30,6 +30,7 @@ public:
     bool has_data = false;
 
 private:
+        //franka::Model model;
 
         std::mutex mutex;
 
