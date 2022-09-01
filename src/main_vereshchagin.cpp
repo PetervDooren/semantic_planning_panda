@@ -27,6 +27,56 @@
 
 #include "data_saver.h"
 
+void velocityControlLaw(Eigen::Vector3d velocity, Eigen::Vector3d reference, KDL::Jacobian& alpha, KDL::JntArray& beta)
+{
+    // Define axes
+    alpha.setColumn(0, KDL::Twist(KDL::Vector(1, 0, 0), KDL::Vector(0,0,0)));
+    alpha.setColumn(1, KDL::Twist(KDL::Vector(0, 1, 0), KDL::Vector(0,0,0)));
+    alpha.setColumn(2, KDL::Twist(KDL::Vector(0, 0, 1), KDL::Vector(0,0,0)));
+    alpha.setColumn(3, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(1,0,0)));
+    alpha.setColumn(4, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(0,1,0)));
+    alpha.setColumn(5, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(0,0,1)));
+
+    // x direction
+    double gain = 1.0;
+    beta(0) = gain * (reference[0] - velocity[0]);
+    beta(1) = gain * (reference[1] - velocity[1]);
+    beta(2) = gain * (reference[2] - velocity[2]);
+}
+
+void jointlimitLaw(KDL::JntArray& q, KDL::JntArray& ff_torques)
+{
+    KDL::JntArray q_lower_limit(7);
+    q_lower_limit(0) = -2.8973;
+    q_lower_limit(1) = -1.7628;
+    q_lower_limit(2) = -2.8973;
+    q_lower_limit(3) = -3.0718;
+    q_lower_limit(4) = -2.8973;
+    q_lower_limit(5) = -0.0175;
+    q_lower_limit(6) = -2.8973;
+
+    KDL::JntArray q_upper_limit(7);
+    q_upper_limit(0) = 2.8973;
+    q_upper_limit(1) = 1.7628;
+    q_upper_limit(2) = 2.8973;
+    q_upper_limit(3) = -0.069;
+    q_upper_limit(4) = 2.8973;
+    q_upper_limit(5) = 3.7525;
+    q_upper_limit(6) = 2.8973;
+
+    double eps = 1.0; // [rad] how close we may get to the joint limits
+    double tau_max = 10.0;
+    for (int i=0; i<7; i++)
+    {
+        if (q(i) < (q_lower_limit(i) + eps))
+            ff_torques(i) = std::min(tau_max, tau_max/eps * (-q(i)+q_lower_limit(i)+eps));
+        else if (q(i) > (q_upper_limit(i) - eps))
+            ff_torques(i) = - std::min(tau_max, tau_max/eps * (q(i)-q_upper_limit(i)+eps));
+        else
+            ff_torques(i) = 0.0;
+        //std::cout << "i: " << i << ", q: " << q(i) << ", ff: " << ff_torques(i) << ", qL: " << (q_lower_limit(i) + eps) << ", qU: " << (q_upper_limit(i) - eps) << std::endl;
+    }
+}
 
 namespace {
 template <class T, size_t N>
@@ -152,6 +202,21 @@ int main(int argc, char** argv) {
 
             time += period.toSec();
 
+            // get state variables
+            std::array<double, 7> coriolis_array = model.coriolis(state);
+            std::array<double, 42> jacobian_array =
+                model.zeroJacobian(franka::Frame::kEndEffector, state);
+
+            // convert to Eigen
+            Eigen::Map<const Eigen::Matrix<double, 7, 1>> coriolis(coriolis_array.data());
+            Eigen::Map<const Eigen::Matrix<double, 6, 7>> jacobian(jacobian_array.data());
+            Eigen::Map<const Eigen::Matrix<double, 7, 1>> dq(state.dq.data());
+            Eigen::Affine3d transform(Eigen::Matrix4d::Map(state.O_T_EE.data()));
+            Eigen::Vector3d position(transform.translation());
+            Eigen::Quaterniond orientation(transform.linear());
+            Eigen::Matrix<double, 6, 1> twist = jacobian * dq;
+            Eigen::Vector3d velocity(twist(0), twist(2), twist(3));
+
             // hardcoded stuff for now
             uint nj = 7;
             uint ns = 7;
@@ -159,24 +224,23 @@ int main(int argc, char** argv) {
 
             // instantiating solver inputs
             KDL::JntArray q(nj);
-            for (uint i=0; i<q.columns(); i++)
+            for (uint i=0; i<q.rows(); i++)
                     q(i) = state.q[i];
 
             KDL::JntArray q_dot(nj);
-            for (uint i=0; i<q_dot.columns(); i++)
+            for (uint i=0; i<q_dot.rows(); i++)
                     q_dot(i) = state.dq[i];
 
             KDL::Jacobian alpha(nc);
-            alpha.setColumn(0, KDL::Twist(KDL::Vector(1, 0, 0), KDL::Vector(0,0,0)));
-            alpha.setColumn(1, KDL::Twist(KDL::Vector(0, 1, 0), KDL::Vector(0,0,0)));
-            alpha.setColumn(2, KDL::Twist(KDL::Vector(0, 0, 1), KDL::Vector(0,0,0)));
-            alpha.setColumn(3, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(1,0,0)));
-            alpha.setColumn(4, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(0,1,0)));
-            alpha.setColumn(5, KDL::Twist(KDL::Vector(0, 0, 0), KDL::Vector(0,0,1)));
             KDL::JntArray beta(nc);
-            beta(2) = 1.0;
             KDL::Wrenches f_ext(ns);
             KDL::JntArray ff_torques(nj);
+
+            // set solver constraints
+            Eigen::Vector3d desired_velocity(0.0, 0.0, 0.5);
+            //velocityControlLaw(velocity, desired_velocity, alpha, beta);
+
+            jointlimitLaw(q, ff_torques);
 
             // instantiate solver output
             KDL::JntArray q_dotdot(nj);
