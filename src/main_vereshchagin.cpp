@@ -177,21 +177,20 @@ int main(int argc, char** argv) {
             std::vector<KDL::Twist> x_dotdot(ns);
             KDL::JntArray total_torques(nj);
 
-            std::cout << "calling the solver" << std::endl;
             int result = my_solver.CartToJnt(q, q_dot, q_dotdot, alpha, beta, f_ext, ff_torques, constraint_torques);
-            std::cout << "solver returned: " << result << std::endl;
             //my_solver.getTransformedLinkAcceleration(x_dotdot);
             my_solver.getTotalTorque(total_torques);
 
             std::array<double, 7> tau_d_input = {0, 0, 0, 0, 0, 0, 0};
+            std::array<double, 7> tau_gravity = model.gravity(state); // gravity is already compensated in the panda interface
             if (result == 0){
-                std::array<double, 7> tau_gravity = model.gravity(state); // gravity is already compensated in the panda interface
                 for (uint i=0; i<tau_d_input.size(); i++)
-                    tau_d_input[i] = total_torques(i) -tau_gravity[i];
+                    tau_d_input[i] = total_torques(i);// -tau_gravity[i];
             }
+            std::array<double, 7> tau_d_sub = {0, 0, 0, 0, 0, 0, 0}; // substitute input
 
             // Update data to print.
-            data_saver.setData(state, fsmState, tau_d_input, alpha, beta, f_ext, ff_torques);
+            data_saver.setData(state, fsmState, tau_d_input, tau_gravity, alpha, beta, f_ext, ff_torques);
 
             // Send torque command.
             return tau_d_input;

@@ -18,6 +18,7 @@ public:
     bool setData(franka::RobotState state,
                  int fsmState_in,
                  std::array<double, 7> tau_input_in,
+                 std::array<double, 7> gravity,
                  KDL::Jacobian alpha_in,
                  KDL::JntArray beta_in,
                  std::vector<KDL::Wrench> f_ext_in,

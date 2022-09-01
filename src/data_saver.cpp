@@ -65,6 +65,7 @@ void DataSaver::writeData()
 bool DataSaver::setData(franka::RobotState state,
                    int fsmState_in,
                    std::array<double, 7> tau_input_in,
+                   std::array<double, 7> gravity_in,//TODO use an internal model
                    KDL::Jacobian alpha_in,
                    KDL::JntArray beta_in,
                    std::vector<KDL::Wrench> f_ext_in,
@@ -76,7 +77,7 @@ bool DataSaver::setData(franka::RobotState state,
         has_data = true;
 
         robot_state = state;
-        //gravity = model.gravity(state);
+        gravity = gravity_in;
 
         fsmState = fsmState_in;
         tau_input = tau_input_in;
@@ -93,8 +94,12 @@ bool DataSaver::setData(franka::RobotState state,
 
 void DataSaver::printData()
 {
-    std::cout << "robot state: " << fsmState << std::endl
-              << "popov-vershchagin motion drivers:" << std::endl;
+    std::cout << "robot state: " << fsmState << std::endl;
+    std::cout << "q: " << robot_state.q << std::endl;
+
+    std::cout << "q_dot: " << robot_state.dq << std::endl;
+
+    std::cout << "popov-vershchagin motion drivers:" << std::endl;
     std::cout << "alpha" << std::endl;
     printJacobian(alpha);
 
@@ -108,4 +113,5 @@ void DataSaver::printData()
     printJntArray(ff_torques);
 
     std::cout << "desired torques" << tau_input << std::endl;
+    std::cout << "gravity torques" << gravity << std::endl;
 }
