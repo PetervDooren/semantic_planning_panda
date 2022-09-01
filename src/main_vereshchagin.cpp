@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
 
             // hardcoded stuff for now
             uint nj = 7;
-            uint ns = 8;
+            uint ns = 7;
             uint nc = 6;
 
             // instantiating solver inputs
