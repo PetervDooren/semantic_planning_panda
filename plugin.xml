@@ -1,0 +1,7 @@
+<library path="lib/libmy_controller_plugins">
+    <class name="semantic_planning_panda/MyController" type="semantic_planning_panda::MyController" base_class_type="controller_interface::ControllerBase">
+        <description>
+            Test for an example using joint velocity as an example
+        </description>
+    </class>
+</library>

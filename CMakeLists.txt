@@ -25,6 +25,7 @@ catkin_package(
     )
 
 include_directories(
+        include
     ${catkin_INCLUDE_DIRS}
     ${Eigen_INCLUDE_DIRS}
     )
@@ -42,6 +43,13 @@ add_library(my_library STATIC
   src/data_saver.cpp
 )
 target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
+
+add_library(my_controller_plugins src/rosfranka_test.cpp)
+target_link_libraries(my_controller_plugins PUBLIC
+        Franka::Franka
+        ${Eigen_LIBRARIES}
+        ${catkin_LIBRARIES}
+        )
 
 add_executable(main src/main_vereshchagin.cpp)
 target_link_libraries(main PUBLIC
