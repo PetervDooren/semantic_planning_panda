@@ -65,11 +65,12 @@ namespace semantic_planning_panda {
         }
 
         try {
-            auto state_handle = state_interface->getHandle(arm_id + "_robot");
+            state_handle_ = std::make_unique<franka_hw::FrankaStateHandle>(
+                    state_interface->getHandle(arm_id + "_robot"));
 
             std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
             for (size_t i = 0; i < q_start.size(); i++) {
-                if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 0.1) {
+                if (std::abs(state_handle_->getRobotState().q_d[i] - q_start[i]) > 0.1) {
                     ROS_ERROR_STREAM(
                             "MyController: Robot is not in the expected starting position for "
                             "running this example. Run `roslaunch franka_example_controllers move_to_start.launch "
@@ -94,7 +95,7 @@ namespace semantic_planning_panda {
 
     void MyController::update(const ros::Time& /* time */,
                                                 const ros::Duration& period) {
-        if (true) {
+        if (active) {
             elapsed_time_ += period;
             franka::RobotState robot_state = state_handle_->getRobotState();
             std::array<double, 7> q = robot_state.q;
@@ -118,14 +119,12 @@ namespace semantic_planning_panda {
             std::vector<double> q_d = {0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4};
             std::vector<double> tau_des = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
 
-            /*
             for (int i = 0; i < q.size(); i++) {
-                tau_des[i] = k_gains[i] * (q_d[i] - q[i]);// - d_gains[i] * dq[i];
+                tau_des[i] = k_gains[i] * (q_d[i] - q[i]) - d_gains[i] * dq[i];
             }
-             */
 
             for (int i = 0; i < joint_handles_.size(); i++) {
-                joint_handles_[i].setCommand(0.0);
+                joint_handles_[i].setCommand(tau_des[i]);
             }
         }
         else
