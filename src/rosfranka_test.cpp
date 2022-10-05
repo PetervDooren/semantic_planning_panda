@@ -14,42 +14,53 @@ namespace semantic_planning_panda {
 
     bool MyController::init(hardware_interface::RobotHW* robot_hardware,
                                               ros::NodeHandle& node_handle) {
-        velocity_joint_interface_ = robot_hardware->get<hardware_interface::VelocityJointInterface>();
-        if (velocity_joint_interface_ == nullptr) {
-            ROS_ERROR(
-                    "JointVelocityExampleController: Error getting velocity joint interface from hardware!");
-            return false;
-        }
-
         std::string arm_id;
         if (!node_handle.getParam("arm_id", arm_id)) {
-            ROS_ERROR("JointVelocityExampleController: Could not get parameter arm_id");
+            ROS_ERROR("MyController: Could not get parameter arm_id");
             return false;
         }
 
         std::vector<std::string> joint_names;
         if (!node_handle.getParam("joint_names", joint_names)) {
-            ROS_ERROR("JointVelocityExampleController: Could not parse joint names");
+            ROS_ERROR("MyController: Could not parse joint names");
         }
         if (joint_names.size() != 7) {
-            ROS_ERROR_STREAM("JointVelocityExampleController: Wrong number of joint names, got "
+            ROS_ERROR_STREAM("MyController: Wrong number of joint names, got "
                                      << joint_names.size() << " instead of 7 names!");
             return false;
         }
-        velocity_joint_handles_.resize(7);
+
+        auto* model_interface = robot_hardware->get<franka_hw::FrankaModelInterface>();
+        if (model_interface == nullptr) {
+            ROS_ERROR_STREAM("MyController: Error getting model interface from hardware");
+            return false;
+        }
+        try {
+            model_handle_ = std::make_unique<franka_hw::FrankaModelHandle>(
+                    model_interface->getHandle(arm_id + "_model"));
+        } catch (hardware_interface::HardwareInterfaceException& ex) {
+            ROS_ERROR_STREAM(
+                    "MyController: Exception getting model handle from interface: " << ex.what());
+            return false;
+        }
+
+        auto* effort_joint_interface = robot_hardware->get<hardware_interface::EffortJointInterface>();
+        if (effort_joint_interface == nullptr) {
+            ROS_ERROR_STREAM("MyController: Error getting effort joint interface from hardware");
+            return false;
+        }
         for (size_t i = 0; i < 7; ++i) {
             try {
-                velocity_joint_handles_[i] = velocity_joint_interface_->getHandle(joint_names[i]);
+                joint_handles_.push_back(effort_joint_interface->getHandle(joint_names[i]));
             } catch (const hardware_interface::HardwareInterfaceException& ex) {
-                ROS_ERROR_STREAM(
-                        "JointVelocityExampleController: Exception getting joint handles: " << ex.what());
+                ROS_ERROR_STREAM("MyController: Exception getting joint handles: " << ex.what());
                 return false;
             }
         }
 
         auto state_interface = robot_hardware->get<franka_hw::FrankaStateInterface>();
         if (state_interface == nullptr) {
-            ROS_ERROR("JointVelocityExampleController: Could not get state interface from hardware");
+            ROS_ERROR("MyController: Could not get state interface from hardware");
             return false;
         }
 
@@ -60,7 +71,7 @@ namespace semantic_planning_panda {
             for (size_t i = 0; i < q_start.size(); i++) {
                 if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 0.1) {
                     ROS_ERROR_STREAM(
-                            "JointVelocityExampleController: Robot is not in the expected starting position for "
+                            "MyController: Robot is not in the expected starting position for "
                             "running this example. Run `roslaunch franka_example_controllers move_to_start.launch "
                             "robot_ip:=<robot-ip> load_gripper:=<has-attached-gripper>` first.");
                     return false;
@@ -68,9 +79,11 @@ namespace semantic_planning_panda {
             }
         } catch (const hardware_interface::HardwareInterfaceException& e) {
             ROS_ERROR_STREAM(
-                    "JointVelocityExampleController: Exception getting state handle: " << e.what());
+                    "MyController: Exception getting state handle: " << e.what());
             return false;
         }
+
+        trigger_service_ = node_handle.advertiseService("trigger", &MyController::trigger_callback, this);
 
         return true;
     }
@@ -81,18 +94,45 @@ namespace semantic_planning_panda {
 
     void MyController::update(const ros::Time& /* time */,
                                                 const ros::Duration& period) {
-        elapsed_time_ += period;
+        if (true) {
+            elapsed_time_ += period;
+            franka::RobotState robot_state = state_handle_->getRobotState();
+            std::array<double, 7> q = robot_state.q;
+            std::array<double, 7> dq = robot_state.dq;
 
-        ros::Duration time_max(8.0);
-        double omega_max = 0.1;
-        double cycle = std::floor(
-                std::pow(-1.0, (elapsed_time_.toSec() - std::fmod(elapsed_time_.toSec(), time_max.toSec())) /
-                               time_max.toSec()));
-        double omega = cycle * omega_max / 2.0 *
-                       (1.0 - std::cos(2.0 * M_PI / time_max.toSec() * elapsed_time_.toSec()));
+            /*
+            ros::Duration time_max(8.0);
+            double omega_max = 0.1;
+            double cycle = std::floor(
+                    std::pow(-1.0, (elapsed_time_.toSec() - std::fmod(elapsed_time_.toSec(), time_max.toSec())) /
+                                   time_max.toSec()));
+            double omega = cycle * omega_max / 2.0 *
+                           (1.0 - std::cos(2.0 * M_PI / time_max.toSec() * elapsed_time_.toSec()));
+            */
+            // Set gains for the joint impedance control.
+            // Stiffness
+            const std::vector<double> k_gains = {60.0, 60.0, 60.0, 60.0, 25.0, 15.0, 5.0};
+            // Damping
+            const std::vector<double> d_gains = {5.0, 5.0, 5.0, 5.0, 3.0, 2.5, 1.5};
 
-        for (auto joint_handle : velocity_joint_handles_) {
-            joint_handle.setCommand(omega);
+            std::vector<double> q_d = {0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4};
+            std::vector<double> tau_des = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+
+            /*
+            for (int i = 0; i < q.size(); i++) {
+                tau_des[i] = k_gains[i] * (q_d[i] - q[i]);// - d_gains[i] * dq[i];
+            }
+             */
+
+            for (int i = 0; i < joint_handles_.size(); i++) {
+                joint_handles_[i].setCommand(0.0);
+            }
+        }
+        else
+        {
+            for (auto joint_handle: joint_handles_) {
+                joint_handle.setCommand(0.0);
+            }
         }
     }
 
@@ -100,6 +140,17 @@ namespace semantic_planning_panda {
         // WARNING: DO NOT SEND ZERO VELOCITIES HERE AS IN CASE OF ABORTING DURING MOTION
         // A JUMP TO ZERO WILL BE COMMANDED PUTTING HIGH LOADS ON THE ROBOT. LET THE DEFAULT
         // BUILT-IN STOPPING BEHAVIOR SLOW DOWN THE ROBOT.
+    }
+
+    bool MyController::trigger_callback(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &res)
+    {
+        active = !active;
+        res.success = true;
+        if (active)
+            res.message = "MyController active has been set to True";
+        else
+            res.message = "MyController active has been set to False";
+        return true;
     }
 
 }  // namespace franka_example_controllers

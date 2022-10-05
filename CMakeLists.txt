@@ -41,7 +41,7 @@ add_library(my_library STATIC
   src/tube_control.cpp
   src/compliant_control.cpp
   src/data_saver.cpp
-)
+        src/rosfranka_test.cpp include/rosfranka_test.h)
 target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
 add_library(my_controller_plugins src/rosfranka_test.cpp)
@@ -60,3 +60,13 @@ target_link_libraries(main PUBLIC
   examples_common
   my_library
 )
+
+add_executable(main_ros src/main_rosfranka_test.cpp)
+target_link_libraries(main_ros PUBLIC
+        Franka::Franka
+        ${Eigen_LIBRARIES}
+        ${catkin_LIBRARIES}
+        Threads::Threads
+        examples_common
+        my_library
+        )

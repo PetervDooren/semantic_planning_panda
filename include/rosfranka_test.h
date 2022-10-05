@@ -6,17 +6,19 @@
 #include <vector>
 
 #include <controller_interface/multi_interface_controller.h>
+#include <franka_hw/franka_model_interface.h>
 #include <franka_hw/franka_state_interface.h>
 #include <hardware_interface/joint_command_interface.h>
 #include <hardware_interface/robot_hw.h>
 #include <ros/node_handle.h>
 #include <ros/time.h>
-#include <ros/time.h>
+#include <std_srvs/Trigger.h>
 
 namespace semantic_planning_panda {
 
     class MyController : public controller_interface::MultiInterfaceController<
-            hardware_interface::VelocityJointInterface,
+            franka_hw::FrankaModelInterface,
+            hardware_interface::EffortJointInterface,
             franka_hw::FrankaStateInterface> {
     public:
         bool init(hardware_interface::RobotHW* robot_hardware, ros::NodeHandle& node_handle) override;
@@ -25,9 +27,15 @@ namespace semantic_planning_panda {
         void stopping(const ros::Time&) override;
 
     private:
-        hardware_interface::VelocityJointInterface* velocity_joint_interface_;
-        std::vector<hardware_interface::JointHandle> velocity_joint_handles_;
+        //hardware_interface::VelocityJointInterface* velocity_joint_interface_;
+        std::unique_ptr<franka_hw::FrankaModelHandle> model_handle_;
+        std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
+        std::vector<hardware_interface::JointHandle> joint_handles_;
         ros::Duration elapsed_time_;
+
+        bool active = false;
+        ros::ServiceServer trigger_service_;
+        bool trigger_callback(std_srvs::TriggerRequest &req, std_srvs::TriggerResponse &res);
     };
 
 }  // namespace franka_example_controllers
