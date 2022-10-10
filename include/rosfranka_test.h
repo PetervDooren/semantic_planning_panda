@@ -14,6 +14,8 @@
 #include <ros/time.h>
 #include <std_srvs/Trigger.h>
 
+#include "semantic_mpc_controller.h"
+
 namespace semantic_planning_panda {
 
     class MyController : public controller_interface::MultiInterfaceController<
@@ -32,6 +34,10 @@ namespace semantic_planning_panda {
         std::unique_ptr<franka_hw::FrankaStateHandle> state_handle_;
         std::vector<hardware_interface::JointHandle> joint_handles_;
         ros::Duration elapsed_time_;
+
+        // controller
+        ModelPredictiveController MPCControl;
+
 
         bool active = false;
         ros::ServiceServer trigger_service_;

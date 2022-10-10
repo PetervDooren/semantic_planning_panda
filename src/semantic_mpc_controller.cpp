@@ -118,14 +118,12 @@ void limitForce(Eigen::Matrix<double, 6, 1> force)
         force(i,0) = std::min(max_torque, std::max(-max_torque, force(i,0)));
 }
 
-std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotState& robot_state, franka::Duration period)
+std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotState& robot_state, const ros::Duration& period)
 {
-    // aggregate robot state
-
     // get state variables
-    std::array<double, 7> coriolis_array = robot_model->coriolis(robot_state);
+    std::array<double, 7> coriolis_array = robot_model->getCoriolis();
     std::array<double, 42> jacobian_array =
-        robot_model->zeroJacobian(franka::Frame::kEndEffector, robot_state);
+        robot_model->getZeroJacobian(franka::Frame::kEndEffector);
 
     // convert to Eigen
     Eigen::Map<const Eigen::Matrix<double, 7, 1>> coriolis(coriolis_array.data());
@@ -229,7 +227,8 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     // Transform to base frame
     orientation_error.tail(3) << -transform.linear() * orientation_error.tail(3);
     // compute control
-    Eigen::VectorXd tau_task(7), tau_d(7);
+    Eigen::VectorXd tau_task(7);
+    Eigen::VectorXd tau_d(7);
 
     force_applied.tail(3) << -rotational_stiffness * orientation_error - rotational_damping * velocity.tail(3);
 

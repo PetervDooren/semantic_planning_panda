@@ -1,6 +1,6 @@
 // Copyright (c) 2017 Franka Emika GmbH
 // Use of this source code is governed by the Apache-2.0 license, see LICENSE
-#include "../include/rosfranka_test.h"
+#include "rosfranka_test.h"
 
 #include <cmath>
 
@@ -73,6 +73,9 @@ namespace semantic_planning_panda {
             return false;
         }
 
+        // configure controller
+        MPCControl = ModelPredictiveController(model_handle_.get());
+
         trigger_service_ = node_handle.advertiseService("trigger", &MyController::trigger_callback, this);
 
         return true;
@@ -90,15 +93,8 @@ namespace semantic_planning_panda {
             std::array<double, 7> q = robot_state.q;
             std::array<double, 7> dq = robot_state.dq;
 
-            /*
-            ros::Duration time_max(8.0);
-            double omega_max = 0.1;
-            double cycle = std::floor(
-                    std::pow(-1.0, (elapsed_time_.toSec() - std::fmod(elapsed_time_.toSec(), time_max.toSec())) /
-                                   time_max.toSec()));
-            double omega = cycle * omega_max / 2.0 *
-                           (1.0 - std::cos(2.0 * M_PI / time_max.toSec() * elapsed_time_.toSec()));
-            */
+            std::array<double, 7> tau_d_input = MPCControl.controlLaw(robot_state, period);
+
             // Set gains for the joint impedance control.
             // Stiffness
             const std::vector<double> k_gains = {60.0, 60.0, 60.0, 60.0, 25.0, 15.0, 5.0};

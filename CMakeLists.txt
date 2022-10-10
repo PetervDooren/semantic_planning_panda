@@ -35,19 +35,20 @@ add_library(examples_common STATIC
 )
 target_link_libraries(examples_common PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
-add_library(my_library STATIC
-  src/position_control.cpp
-  src/velocity_control.cpp
-  src/tube_control.cpp
-  src/compliant_control.cpp
-  src/data_saver.cpp
-        src/rosfranka_test.cpp include/rosfranka_test.h)
+add_library(my_library SHARED
+        src/position_control.cpp
+        src/velocity_control.cpp
+        src/tube_control.cpp
+        src/compliant_control.cpp
+        src/data_saver.cpp
+        src/semantic_mpc_controller.cpp
+        )
 target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
 add_library(my_controller_plugins src/rosfranka_test.cpp)
 target_link_libraries(my_controller_plugins PUBLIC
+        my_library
         Franka::Franka
-        ${Eigen_LIBRARIES}
         ${catkin_LIBRARIES}
         )
 
