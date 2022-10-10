@@ -45,7 +45,7 @@ Topology determineTopology(double x, double y, double z)
 {
     HorizontalTopology htop = determineHorizontalTopology(x, y);
     VerticalTopology vtop = determineVerticalTopology(z);
-    std::cout << "htop: " << htop << "vtop: " << vtop << std::endl;
+    //std::cout << "htop: " << htop << "vtop: " << vtop << std::endl;
 
     if (htop == over && (vtop == level || vtop == target))
         return near_wall;
@@ -138,7 +138,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     // determine the semantic state of the robot
     Topology top = determineTopology(position[0], position[1], position[2]);
 
-    std::cout << "top: " << top << std::endl;
+    //std::cout << "top: " << top << std::endl;
 
     // control law based on this state
     bool use_velocity_control = true;

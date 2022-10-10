@@ -90,26 +90,11 @@ namespace semantic_planning_panda {
         if (active) {
             elapsed_time_ += period;
             franka::RobotState robot_state = state_handle_->getRobotState();
-            std::array<double, 7> q = robot_state.q;
-            std::array<double, 7> dq = robot_state.dq;
 
             std::array<double, 7> tau_d_input = MPCControl.controlLaw(robot_state, period);
 
-            // Set gains for the joint impedance control.
-            // Stiffness
-            const std::vector<double> k_gains = {60.0, 60.0, 60.0, 60.0, 25.0, 15.0, 5.0};
-            // Damping
-            const std::vector<double> d_gains = {5.0, 5.0, 5.0, 5.0, 3.0, 2.5, 1.5};
-
-            std::vector<double> q_d = {0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4};
-            std::vector<double> tau_des = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
-
-            for (int i = 0; i < q.size(); i++) {
-                tau_des[i] = k_gains[i] * (q_d[i] - q[i]) - d_gains[i] * dq[i];
-            }
-
             for (int i = 0; i < joint_handles_.size(); i++) {
-                joint_handles_[i].setCommand(tau_des[i]);
+                joint_handles_[i].setCommand(tau_d_input[i]);
             }
         }
         else
