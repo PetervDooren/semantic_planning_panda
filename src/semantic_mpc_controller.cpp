@@ -16,8 +16,6 @@
 enum HorizontalTopology{outside, over, inside};
 enum VerticalTopology{above, level, target, below};
 
-enum Topology{in_box, over_box, above_box, next_to_box, below_box, near_wall};
-
 HorizontalTopology determineHorizontalTopology(double x, double y)
 {
     x = std::abs(x-BOX_X_POS); // relative potition + symmetry
@@ -41,13 +39,16 @@ VerticalTopology determineVerticalTopology(double z)
     return below;
 }
 
-Topology determineTopology(double x, double y, double z)
+Topology determineTopology(double x, double y, double z, Topology prev)
 {
     HorizontalTopology htop = determineHorizontalTopology(x, y);
     VerticalTopology vtop = determineVerticalTopology(z);
     //std::cout << "htop: " << htop << "vtop: " << vtop << std::endl;
 
+
     if (htop == over && (vtop == level || vtop == target))
+        if (prev == in_box)
+            return in_box;
         return near_wall;
 
     if (htop == inside && vtop == target)
@@ -136,7 +137,8 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Eigen::Matrix<double, 6, 1> velocity = jacobian * dq;
 
     // determine the semantic state of the robot
-    Topology top = determineTopology(position[0], position[1], position[2]);
+    Topology top = determineTopology(position[0], position[1], position[2], prev_top);
+    prev_top = top;
 
     //std::cout << "top: " << top << std::endl;
 
