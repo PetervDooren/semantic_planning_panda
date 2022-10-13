@@ -66,21 +66,33 @@ Topology WorldModel::determineTopology(double x, double y, double z, Topology pr
     VerticalTopology vtop = determineVerticalTopology(z);
     //std::cout << "htop: " << htop << "vtop: " << vtop << std::endl;
 
-
-    if (htop == over && (vtop == level || vtop == target))
-        if (prev == in_box)
+    //FSM
+    switch(prev)
+    {
+    case next_to_box:
+        if (vtop == above)
+            return above_box;
+        break;
+    case above_box:
+        if (htop == inside)
+            return over_box;
+        if (vtop == level)
+            return next_to_box;
+        break;
+    case over_box:
+        if (vtop == target)
             return in_box;
-        return near_wall;
-
-    if (htop == inside && vtop == target)
-        return in_box;
-    if ((htop == inside && (vtop == above || vtop == level)))
-        return over_box;
-    if (vtop == above)
-        return above_box;
-    if (htop == outside)
-        return next_to_box;
-    return below_box;
+        if (htop == outside)
+            return above_box;
+        break;
+    case in_box:
+        if (htop == outside) // TODO this would reflect a change in belief state only
+            return next_to_box;
+        if (vtop == above)
+            return over_box;
+        break;
+    }
+    return prev;
 }
 
 Eigen::Vector2d WorldModel::out(double x, double y)

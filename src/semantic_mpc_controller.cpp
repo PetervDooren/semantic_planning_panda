@@ -2,6 +2,7 @@
 
 #include <iostream>
 
+
 void limitForce(Eigen::Matrix<double, 6, 1> force)
 {
     double max_F = 10.0;
@@ -29,11 +30,14 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Eigen::Quaterniond orientation(transform.linear());
     Eigen::Matrix<double, 6, 1> velocity = jacobian * dq;
 
+    std::array< double, 6 > F_ext = robot_state.O_F_ext_hat_K;
+
     // determine the semantic state of the robot
     Topology top = wm.determineTopology(position[0], position[1], position[2], prev_top);
     prev_top = top;
 
-    //std::cout << "top: " << top << std::endl;
+    bool contact = detectContact(velocity, F_ext);
+    std::cout << "contact: " << contact << std::endl;
 
     // control law based on this state
     bool use_velocity_control = true;
