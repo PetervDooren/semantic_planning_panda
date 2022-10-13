@@ -13,7 +13,7 @@
 
 #include <franka_hw/franka_model_interface.h>
 
-enum Topology{in_box, over_box, above_box, next_to_box, below_box, near_wall};
+#include "worldmodel.h"
 
 class ModelPredictiveController {
 public:
@@ -30,6 +30,7 @@ public:
 private:
     double maximum_end_effector_velocity;
     Topology prev_top;
+    WorldModel wm;
 
     franka_hw::FrankaModelHandle *robot_model = nullptr;
 };

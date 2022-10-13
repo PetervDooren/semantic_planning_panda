@@ -2,113 +2,6 @@
 
 #include <iostream>
 
-// box dimensions
-#define BOX_X_POS 0.65
-#define BOX_Y_POS 0.0
-#define BOX_Z_POS 0.0
-#define BOX_WIDTH 0.35 //   Y Direction
-#define BOX_LENGTH 0.25 // x direction
-#define BOX_HEIGHT 0.30
-#define WALL_WIDTH 0.15
-#define FLOOR_HEIGHT 0.01
-#define TARGET_HEIGHT 0.15
-
-enum HorizontalTopology{outside, over, inside};
-enum VerticalTopology{above, level, target, below};
-
-HorizontalTopology determineHorizontalTopology(double x, double y)
-{
-    x = std::abs(x-BOX_X_POS); // relative potition + symmetry
-    y = std::abs(y-BOX_Y_POS); // relative position + symmetry
-    if (x > 0.5*BOX_LENGTH + WALL_WIDTH || y > 0.5*BOX_WIDTH + WALL_WIDTH)
-        return outside;
-    if (x < 0.5*BOX_LENGTH && y < 0.5*BOX_WIDTH)
-        return inside;
-    return over;
-}
-
-VerticalTopology determineVerticalTopology(double z)
-{
-    z = z-BOX_Z_POS; // relative potition
-    if (z > BOX_HEIGHT)
-        return above;
-    if (z > TARGET_HEIGHT)
-        return level;
-    if (z > FLOOR_HEIGHT)
-        return target;
-    return below;
-}
-
-Topology determineTopology(double x, double y, double z, Topology prev)
-{
-    HorizontalTopology htop = determineHorizontalTopology(x, y);
-    VerticalTopology vtop = determineVerticalTopology(z);
-    //std::cout << "htop: " << htop << "vtop: " << vtop << std::endl;
-
-
-    if (htop == over && (vtop == level || vtop == target))
-        if (prev == in_box)
-            return in_box;
-        return near_wall;
-
-    if (htop == inside && vtop == target)
-        return in_box;
-    if ((htop == inside && (vtop == above || vtop == level)))
-        return over_box;
-    if (vtop == above)
-        return above_box;
-    if (htop == outside)
-        return next_to_box;
-    return below_box;
-}
-
-Eigen::Vector2d out(double x, double y)
-{
-    double dx = x-BOX_X_POS;
-    double dy = y-BOX_Y_POS;
-    double dist = sqrt(dx*dx + dy*dy);
-
-    Eigen::Vector2d outputvel;
-    outputvel[0] = dx/dist;
-    outputvel[1] = dy/dist;
-    return outputvel;
-}
-
-Eigen::Vector2d in(double x, double y)
-{
-    double dx = x-BOX_X_POS;
-    double dy = y-BOX_Y_POS;
-    double dist = sqrt(dx*dx + dy*dy);
-
-    Eigen::Vector2d outputvel;
-    outputvel[0] = -dx/dist;
-    outputvel[1] = -dy/dist;
-    return outputvel;
-}
-
-Eigen::Vector2d avoid_wall(double x, double y)
-{
-
-
-    // x velocity
-    double dx = x-BOX_X_POS;
-    bool x_in = std::abs(dx) < 0.5*(BOX_LENGTH + WALL_WIDTH);
-
-    // y velocity
-    double dy = y-BOX_Y_POS;
-    bool y_in = std::abs(dy) < 0.5*(BOX_WIDTH + WALL_WIDTH);
-
-    Eigen::Vector2d outputvel = out(x, y); // outward motion
-
-    if (x_in)
-        outputvel[0] = -outputvel[0];
-
-    if (y_in)
-        outputvel[1] = -outputvel[1];
-
-    return outputvel;
-}
-
 void limitForce(Eigen::Matrix<double, 6, 1> force)
 {
     double max_F = 10.0;
@@ -137,7 +30,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Eigen::Matrix<double, 6, 1> velocity = jacobian * dq;
 
     // determine the semantic state of the robot
-    Topology top = determineTopology(position[0], position[1], position[2], prev_top);
+    Topology top = wm.determineTopology(position[0], position[1], position[2], prev_top);
     prev_top = top;
 
     //std::cout << "top: " << top << std::endl;
@@ -167,7 +60,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
         break;
     case above_box:
         std::cout << "topology: above_box" << std::endl;
-        desired_velocity.head(2) << in(position[0], position[1]);
+        desired_velocity.head(2) << wm.in(position[0], position[1]);
         desired_velocity[2] = 0.0;
         break;
     case next_to_box:
@@ -178,13 +71,16 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
         break;
     case below_box:
         std::cout << "topology: below_box" << std::endl;
-        desired_velocity.head(2) << out(position[0], position[1]);
+        desired_velocity.head(2) << wm.out(position[0], position[1]);
         desired_velocity[2] = 0.0;
         break;
-    case near_wall:
-        std::cout << "topology: near_wall" << std::endl;
-        desired_velocity.head(2) << avoid_wall(position[0], position[1]);
-        desired_velocity[2] = 0.0;
+    default:
+        std::cout << "unknown topology, this should not be reached" << std::endl;
+        use_velocity_control = false;
+        use_force_control = true;
+        desired_force[0] = 0.0;
+        desired_force[1] = 0.0;
+        desired_force[2] = 0.0;
         break;
     }
 

@@ -42,6 +42,7 @@ add_library(my_library SHARED
         src/compliant_control.cpp
         src/data_saver.cpp
         src/semantic_mpc_controller.cpp
+        src/worldmodel.cpp
         )
 target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})
 
