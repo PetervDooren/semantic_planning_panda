@@ -97,7 +97,7 @@ Topology WorldModel::determineTopology(double x, double y, double z, Topology pr
             return next_to_box;
         break;
     case over_box:
-        if (z < max_floor_z)
+        if (z < min_top_z)
             return in_box;
         if (htop == outside)
             return above_box;
