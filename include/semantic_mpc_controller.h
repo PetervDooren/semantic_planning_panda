@@ -29,7 +29,7 @@ public:
 
 private:
     double maximum_end_effector_velocity;
-    Topology prev_top;
+    Topology prev_top = next_to_box;
     WorldModel wm;
 
     franka_hw::FrankaModelHandle *robot_model = nullptr;
