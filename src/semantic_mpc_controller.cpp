@@ -36,8 +36,8 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     Topology top = wm.determineTopology(position[0], position[1], position[2], prev_top);
     prev_top = top;
 
-    bool contact = detectContact(velocity, F_ext);
-    std::cout << "contact: " << contact << std::endl;
+    //bool contact = detectContact(velocity, F_ext);
+    //std::cout << "contact: " << contact << std::endl;
 
     // control law based on this state
     bool use_velocity_control = true;
@@ -49,7 +49,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     switch(top)
     {
     case in_box:
-        std::cout << "topology: in_box" << std::endl;
+        //std::cout << "topology: in_box" << std::endl;
         use_velocity_control = false;
         use_force_control = true;
         desired_force[0] = -3.0;
@@ -57,24 +57,24 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
         desired_force[2] = 0.0;
         break;
     case over_box:
-        std::cout << "topology: over_box" << std::endl;
+        //std::cout << "topology: over_box" << std::endl;
         desired_velocity[0] = 0.0;
         desired_velocity[1] = 0.0;
         desired_velocity[2] = -1.0; //down
         break;
     case above_box:
-        std::cout << "topology: above_box" << std::endl;
+        //std::cout << "topology: above_box" << std::endl;
         desired_velocity.head(2) << wm.in(position[0], position[1]);
         desired_velocity[2] = 0.0;
         break;
     case next_to_box:
-        std::cout << "topology: next_to_box" << std::endl;
+        //std::cout << "topology: next_to_box" << std::endl;
         desired_velocity[0] = 0.0;
         desired_velocity[1] = 0.0;
         desired_velocity[2] = 1.0;
         break;
     case below_box:
-        std::cout << "topology: below_box" << std::endl;
+        //std::cout << "topology: below_box" << std::endl;
         desired_velocity.head(2) << wm.out(position[0], position[1]);
         desired_velocity[2] = 0.0;
         break;
@@ -96,13 +96,13 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
 
     // position velocity control
     if (use_velocity_control){
-        std::cout << "desired velocity: " << desired_velocity << std::endl;
+        //std::cout << "desired velocity: " << desired_velocity << std::endl;
         double velocity_gain = 10;
         force_applied.head(3) << velocity_gain * (desired_velocity - velocity.head(3));
     }
     else if(use_force_control)
     {
-        std::cout << "desired force: " << desired_force << std::endl;
+        //std::cout << "desired force: " << desired_force << std::endl;
         force_applied.head(3) << desired_force;
     }
     else
@@ -142,5 +142,7 @@ std::array<double, 7> ModelPredictiveController::controlLaw(const franka::RobotS
     tau_d << tau_task + coriolis;
     std::array<double, 7> tau_d_array{};
     Eigen::VectorXd::Map(&tau_d_array[0], 7) = tau_d;
+
+    std::array<double, 7> tau_d_zero{0, 0, 0, 0, 0, 0, 0};
     return tau_d_array;
 }
