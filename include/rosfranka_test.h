@@ -14,7 +14,7 @@
 #include <ros/time.h>
 #include <std_srvs/Trigger.h>
 
-#include "semantic_mpc_controller.h"
+#include "cornerplace_skill.h"
 
 namespace semantic_planning_panda {
 
@@ -36,7 +36,7 @@ namespace semantic_planning_panda {
         ros::Duration elapsed_time_;
 
         // controller
-        ModelPredictiveController MPCControl;
+        CornerPlaceController MPCControl;
 
 
         bool active = false;

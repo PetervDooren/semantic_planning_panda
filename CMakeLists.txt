@@ -41,7 +41,9 @@ add_library(my_library SHARED
         src/tube_control.cpp
         src/compliant_control.cpp
         src/data_saver.cpp
-        src/semantic_mpc_controller.cpp
+        #src/semantic_mpc_controller.cpp
+        src/putdown_controller.cpp
+        src/cornerplace_skill.cpp
         src/worldmodel.cpp
         )
 target_link_libraries(my_library PUBLIC Franka::Franka ${Eigen_LIBRARIES})

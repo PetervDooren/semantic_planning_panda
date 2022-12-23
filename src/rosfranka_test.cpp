@@ -74,7 +74,7 @@ namespace semantic_planning_panda {
         }
 
         // configure controller
-        MPCControl = ModelPredictiveController(model_handle_.get());
+        MPCControl = CornerPlaceController(model_handle_.get());
 
         trigger_service_ = node_handle.advertiseService("trigger", &MyController::trigger_callback, this);
 
