@@ -1,0 +1,26 @@
+<?xml version="1.0" ?>
+<sdf version="1.4">
+  <world name="default">
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+    <include>
+      <uri>model://sun</uri>
+    </include>
+    <include>
+      <uri>model://panda_table</uri>
+      <name>table</name>
+      <pose>0.0 0.0 0 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://box</uri>
+      <name>box</name>
+      <pose>0.0 0.2 0.8 0 0 0</pose>
+    </include>
+    <include>
+      <uri>model://rice_box</uri>
+      <name>rice_box</name>
+      <pose>0.0 -0.2 0.8 0 0 0</pose>
+    </include>
+  </world>
+</sdf>
